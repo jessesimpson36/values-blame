@@ -5,7 +5,6 @@ import (
 	chart "helm.sh/helm/v4/pkg/chart/v2"
 	util "helm.sh/helm/v4/pkg/chart/v2/util"
 	"os"
-	"reflect"
 	"strings"
 )
 
@@ -20,82 +19,6 @@ type ValuesYAMLNode struct {
 	Next  *ValuesYAMLNode `yaml:"next,omitempty"`
 }
 
-// traverse all options in the values yaml and determine if the new file sets them during coalescing
-func traverseValues(valuesCoalesced map[string]interface{}, valuesApplied map[string]interface{}, fileNameApplied string, optionPrefix string, options *map[string]ValuesYAMLLine, node *ValuesYAMLNode) {
-	for key, value := range valuesCoalesced {
-		fullKey := optionPrefix + key
-		valuesLine := ValuesYAMLLine{
-			FileName: "blah",
-			Option:   fullKey,
-			Line:     "blah",
-		}
-		if node.Next == nil {
-			node.Next = &ValuesYAMLNode{
-				Value: &valuesLine,
-				Next:  nil,
-			}
-		} else {
-			if node.Next.Value.Option != fullKey {
-				currentNext := node.Next
-				node.Next = &ValuesYAMLNode{
-					Value: &valuesLine,
-					Next:  currentNext,
-				}
-			}
-		}
-		if subMap, ok := value.(map[string]interface{}); ok {
-			appliedValue, ok := valuesApplied[key]
-			if !ok {
-				if node.Next != nil {
-					node.Next = node.Next.Next
-				}
-				continue
-			}
-			if appliedSubMap, ok := appliedValue.(map[string]interface{}); ok {
-				numberOfPeriods := strings.Count(fullKey, ".")
-				valuesLine.FileName = fileNameApplied
-				valuesLine.Line = fmt.Sprintf("%s%s", strings.Repeat("  ", numberOfPeriods), key)
-				prev := node
-				for node.Next != nil {
-					if node.Next.Value.Option != fullKey {
-						prev = node
-						node = node.Next
-					} else {
-						break
-					}
-				}
-				node = prev
-				node.Next.Value = &valuesLine
-				(*options)[optionPrefix + key] = valuesLine
-				traverseValues(subMap, appliedSubMap, fileNameApplied, optionPrefix + key + ".", options, node.Next)
-				for node.Next != nil {
-					if strings.HasPrefix(node.Next.Value.Option, fullKey + ".") {
-						node = node.Next
-					} else {
-						break
-					}
-				}
-			}
-		} else {
-			appliedValue, ok := valuesApplied[key]
-			if !ok {
-				if node.Next != nil {
-					node.Next = node.Next.Next
-				}
-				continue
-			}
-			if strings.HasPrefix(reflect.TypeOf(appliedValue).String(), "[]") || appliedValue == value {
-				numberOfPeriods := strings.Count(fullKey, ".")
-				valuesLine.FileName = fileNameApplied
-				valuesLine.Line = fmt.Sprintf("%s%s: %v", strings.Repeat("  ", numberOfPeriods), key, value)
-				node.Next.Value = &valuesLine
-				node = node.Next
-				(*options)[optionPrefix + key] = valuesLine
-			}
-		}
-	}
-}
-
 func numberOfCharsInBiggestFileName(options map[string]ValuesYAMLLine) int {
 	max := 0
 	for _, option := range options {
@@ -106,6 +29,98 @@ func numberOfCharsInBiggestFileName(options map[string]ValuesYAMLLine) int {
 	return max
 }
 
+func isOptionWithinAppliedValues(option string, valuesApplied map[string]interface{}) bool {
+	fmt.Printf("Checking if option '%s' is within applied values\n", option)
+	optionArray := strings.Split(option, ".")
+	current := valuesApplied
+	for i, valueKey := range optionArray {
+		currentValue, ok := current[valueKey]
+		if !ok {
+			return false
+		}
+		if current, ok = currentValue.(map[string]interface{}); !ok {
+			// if current is a primitive, and is the last option, then the option is within the applied values
+			return i >= len(optionArray)-1
+		}
+	}
+	return true
+}
+
+func getListOfKeys(values map[string]interface{}) []string {
+	keys := make([]string, 0, len(values))
+	for key := range values {
+		keys = append(keys, key)
+		if subMap, ok := values[key].(map[string]interface{}); ok {
+			subKeys := getListOfKeys(subMap)
+			for _, subKey := range subKeys {
+				keys = append(keys, key+"."+subKey)
+			}
+		}
+	}
+	return keys
+}
+
+func getValueAtKey(values map[string]interface{}, key string) interface{} {
+	keys := strings.Split(key, ".")
+	current := values
+	for _, k := range keys {
+		if value, ok := current[k]; ok {
+			if subMap, ok := value.(map[string]interface{}); ok {
+				current = subMap
+			} else {
+				return value
+			}
+		} else {
+			return nil
+		}
+	}
+	return ""
+}
+
+func traverseValues(valuesCoalesced map[string]interface{}, valuesApplied map[string]interface{}, fileNameApplied string, options *map[string]ValuesYAMLLine) {
+
+	keys := getListOfKeys(valuesCoalesced)
+	for _, key := range keys {
+		if isOptionWithinAppliedValues(key, valuesApplied) {
+			lastKey := key
+			lastDotIndex := strings.LastIndex(key, ".")
+			if lastDotIndex != -1 {
+				lastKey = key[lastDotIndex+1:] // Get the last part of the key after the last dot
+			}
+			line := ValuesYAMLLine{
+				FileName: fileNameApplied,
+				Option:   key,
+				Line:     fmt.Sprintf("%s: %v", lastKey, getValueAtKey(valuesCoalesced, key)),
+			}
+			(*options)[key] = line
+		}
+	}
+}
+
+func traverseCoalesceAndPrintFile(valuesCoalesced map[string]interface{}, options *map[string]ValuesYAMLLine, prefix string, maxFileNameLength int, indentDepth int) {
+	for key, value := range valuesCoalesced {
+		if subMap, ok := value.(map[string]interface{}); ok {
+			checkedPrefix := ""
+			if prefix != "" {
+				checkedPrefix = prefix + "."
+			}
+			line := (*options)[checkedPrefix+key]
+
+			indent := strings.Repeat("  ", indentDepth)
+			fmt.Printf("%-*s %s%s\n", maxFileNameLength, line.FileName, indent, line.Line)
+			traverseCoalesceAndPrintFile(subMap, options, checkedPrefix+key, maxFileNameLength, indentDepth+1)
+		} else {
+			checkedPrefix := ""
+			if prefix != "" {
+				checkedPrefix = prefix + "."
+			}
+			line := (*options)[checkedPrefix+key]
+			indent := strings.Repeat("  ", indentDepth)
+			fmt.Printf("%-*s %s%s\n", maxFileNameLength, line.FileName, indent, line.Line)
+		}
+	}
+
+}
 
 func main() {
 
@@ -134,7 +149,6 @@ func main() {
 		return
 	}
 
-	head := &ValuesYAMLNode{}
 	options := make(map[string]ValuesYAMLLine)
 	valuesCoalesced := v1
 
@@ -146,8 +160,7 @@ func main() {
 		Templates: []*chart.File{},
 		Values: v1,
 	}
-	node := head
-	traverseValues(valuesCoalesced, v1, valuesFilesList[0], "", &options, node)
+	traverseValues(valuesCoalesced, v1, valuesFilesList[0], &options)
 
 	for _, valuesFile := range valuesFilesList[1:] {
 		fmt.Printf("Processing values file: %s\n", valuesFile)
@@ -169,26 +182,13 @@ func main() {
 			Templates: []*chart.File{},
 			Values: valuesCoalesced,
 		}
-		node := head
-		traverseValues(valuesCoalesced, v1, valuesFile, "", &options, node)
+		traverseValues(valuesCoalesced, v1, valuesFile, &options)
 	}
 
 
 
 	maxFileNameLength := numberOfCharsInBiggestFileName(options)
-
-
-
-	current := head
-	for current != nil {
-		// Skip the head node
-		if current == head {
-			current = current.Next
-			continue
-		}
-		fmt.Printf("%-*s :  %s\n", maxFileNameLength, options[current.Value.Option].FileName, options[current.Value.Option].Line)
-		current = current.Next
-	}
+	traverseCoalesceAndPrintFile(valuesCoalesced, &options, "", maxFileNameLength, 0)
 
 	strValues, err := valuesCoalesced.YAML()
 	fmt.Printf("Coalesced Values:\n%+v\n", strValues)
