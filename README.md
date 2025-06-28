@@ -12,3 +12,11 @@ To use `values-blame`, simply provide the `values.yaml` files as input using the
 ./values-blame -f values.yaml -f values-2.yaml
 ```
 
+Output
+```
+values-2.yaml global: 
+values-2.yaml   oidc: 
+values-2.yaml     enabled: true
+values.yaml     tls: 
+values.yaml       enabled: true
+```
