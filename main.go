@@ -30,7 +30,6 @@ func numberOfCharsInBiggestFileName(options map[string]ValuesYAMLLine) int {
 }
 
 func isOptionWithinAppliedValues(option string, valuesApplied map[string]interface{}) bool {
-	fmt.Printf("Checking if option '%s' is within applied values\n", option)
 	optionArray := strings.Split(option, ".")
 	current := valuesApplied
 	for i, valueKey := range optionArray {
@@ -97,7 +96,7 @@ func traverseValues(valuesCoalesced map[string]interface{}, valuesApplied map[st
 	}
 }
 
-func traverseCoalesceAndPrintFile(valuesCoalesced map[string]interface{}, options *map[string]ValuesYAMLLine, prefix string, maxFileNameLength int, indentDepth int) {
+func traverseCoalesceAndPrintFile(valuesCoalesced map[string]interface{}, options *map[string]ValuesYAMLLine, prefix string, maxFileNameLength int, indentDepth int, dontPrintFileNames bool) {
 	for key, value := range valuesCoalesced {
 		if subMap, ok := value.(map[string]interface{}); ok {
 			checkedPrefix := ""
@@ -107,8 +106,13 @@ func traverseCoalesceAndPrintFile(valuesCoalesced map[string]interface{}, option
 			line := (*options)[checkedPrefix+key]
 
 			indent := strings.Repeat("  ", indentDepth)
-			fmt.Printf("%-*s %s%s\n", maxFileNameLength, line.FileName, indent, line.Line)
-			traverseCoalesceAndPrintFile(subMap, options, checkedPrefix+key, maxFileNameLength, indentDepth+1)
+			if dontPrintFileNames {
+				fmt.Printf("%s%s\n", indent, line.Line)
+			} else {
+				fmt.Printf("%-*s %s%s\n", maxFileNameLength, line.FileName, indent, line.Line)
+			}
+
+			traverseCoalesceAndPrintFile(subMap, options, checkedPrefix+key, maxFileNameLength, indentDepth+1, dontPrintFileNames)
 		} else {
 			checkedPrefix := ""
 			if prefix != "" {
@@ -116,13 +120,20 @@ func traverseCoalesceAndPrintFile(valuesCoalesced map[string]interface{}, option
 			}
 			line := (*options)[checkedPrefix+key]
 			indent := strings.Repeat("  ", indentDepth)
-			fmt.Printf("%-*s %s%s\n", maxFileNameLength, line.FileName, indent, line.Line)
+			if dontPrintFileNames {
+				fmt.Printf("%s%s\n", indent, line.Line)
+			} else {
+				fmt.Printf("%-*s %s%s\n", maxFileNameLength, line.FileName, indent, line.Line)
+			}
 		}
 	}
 
 }
 
 func main() {
+
+	onlyPrintCoalesced := false
+	dontPrintFileNames := false
 
 	// process values files via -f filename -f filename2
 	if len(os.Args) < 2 {
@@ -138,11 +149,19 @@ func main() {
 		if strings.HasPrefix(os.Args[i], "--values") {
 			continue
 		}
+		if strings.HasPrefix(os.Args[i], "-c") {
+			onlyPrintCoalesced = true
+			continue
+		}
+		if strings.HasPrefix(os.Args[i], "-n") {
+			dontPrintFileNames = true
+			continue
+		}
+
 		valuesFilesList = append(valuesFilesList, os.Args[i])
 	}
 
 
-	fmt.Printf("Processing values file: %s\n", valuesFilesList[0])
 	v1, err := util.ReadValuesFile(valuesFilesList[0])
 	if err != nil {
 		fmt.Printf("Error reading values file %s: %v\n", valuesFilesList[0], err)
@@ -163,7 +182,6 @@ func main() {
 	traverseValues(valuesCoalesced, v1, valuesFilesList[0], &options)
 
 	for _, valuesFile := range valuesFilesList[1:] {
-		fmt.Printf("Processing values file: %s\n", valuesFile)
 		v1, err := util.ReadValuesFile(valuesFile)
 		if err != nil {
 			fmt.Printf("Error reading values file %s: %v\n", valuesFile, err)
@@ -188,9 +206,13 @@ func main() {
 
 
 	maxFileNameLength := numberOfCharsInBiggestFileName(options)
-	traverseCoalesceAndPrintFile(valuesCoalesced, &options, "", maxFileNameLength, 0)
+	if !onlyPrintCoalesced {
+		traverseCoalesceAndPrintFile(valuesCoalesced, &options, "", maxFileNameLength, 0, dontPrintFileNames)
+	}
 
 	strValues, err := valuesCoalesced.YAML()
-	fmt.Printf("Coalesced Values:\n%+v\n", strValues)
+	if onlyPrintCoalesced {
+		fmt.Printf("Coalesced Values:\n%+v\n", strValues)
+	}
 
 }
