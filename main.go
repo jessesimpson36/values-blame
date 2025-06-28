@@ -96,6 +96,16 @@ func traverseValues(valuesCoalesced map[string]interface{}, valuesApplied map[st
 	}
 }
 
+func printLine(line ValuesYAMLLine, maxFileNameLength int, indentDepth int, dontPrintFileNames bool) {
+	indent := strings.Repeat("  ", indentDepth)
+	if dontPrintFileNames {
+		fmt.Printf("%s%s\n", indent, line.Line)
+	} else {
+		fmt.Printf("%-*s %s%s\n", maxFileNameLength, line.FileName, indent, line.Line)
+	}
+
+}
+
 func traverseCoalesceAndPrintFile(valuesCoalesced map[string]interface{}, options *map[string]ValuesYAMLLine, prefix string, maxFileNameLength int, indentDepth int, dontPrintFileNames bool) {
 	for key, value := range valuesCoalesced {
 		if subMap, ok := value.(map[string]interface{}); ok {
@@ -105,12 +115,7 @@ func traverseCoalesceAndPrintFile(valuesCoalesced map[string]interface{}, option
 			}
 			line := (*options)[checkedPrefix+key]
 
-			indent := strings.Repeat("  ", indentDepth)
-			if dontPrintFileNames {
-				fmt.Printf("%s%s\n", indent, line.Line)
-			} else {
-				fmt.Printf("%-*s %s%s\n", maxFileNameLength, line.FileName, indent, line.Line)
-			}
+			printLine(line, maxFileNameLength, indentDepth, dontPrintFileNames)
 
 			traverseCoalesceAndPrintFile(subMap, options, checkedPrefix+key, maxFileNameLength, indentDepth+1, dontPrintFileNames)
 		} else {
@@ -119,12 +124,7 @@ func traverseCoalesceAndPrintFile(valuesCoalesced map[string]interface{}, option
 				checkedPrefix = prefix + "."
 			}
 			line := (*options)[checkedPrefix+key]
-			indent := strings.Repeat("  ", indentDepth)
-			if dontPrintFileNames {
-				fmt.Printf("%s%s\n", indent, line.Line)
-			} else {
-				fmt.Printf("%-*s %s%s\n", maxFileNameLength, line.FileName, indent, line.Line)
-			}
+			printLine(line, maxFileNameLength, indentDepth, dontPrintFileNames)
 		}
 	}
 
@@ -202,8 +202,6 @@ func main() {
 		}
 		traverseValues(valuesCoalesced, v1, valuesFile, &options)
 	}
-
-
 
 	maxFileNameLength := numberOfCharsInBiggestFileName(options)
 	if !onlyPrintCoalesced {
