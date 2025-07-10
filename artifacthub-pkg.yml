@@ -1,0 +1,62 @@
+version: 0.1.0
+name: values-blame
+displayName: Values Blame
+createdAt: "2025-07-10T00:00:00Z"
+description: Identify which values.yaml file contributes each configuration value in Helm deployments
+logoURL: https://raw.githubusercontent.com/helm/helm/main/docs/logos/helm.svg
+digest: ""
+license: MIT
+homeURL: https://github.com/jessesimpson36/values-blame
+appVersion: 0.1.0
+containersImages: []
+operator: false
+deprecated: false
+prerelease: false
+keywords:
+  - helm
+  - plugin
+  - values
+  - debugging
+  - configuration
+  - yaml
+links:
+  - name: Source
+    url: https://github.com/jessesimpson36/values-blame
+  - name: Issues
+    url: https://github.com/jessesimpson36/values-blame/issues
+maintainers:
+  - name: Jesse Simpson
+    email: jesse.simpson36@gmail.com
+provider:
+  name: Jesse Simpson
+readme: |
+  # values-blame
+
+  A Helm plugin that helps you identify which `values.yaml` file contributes each configuration value when you have multiple values files in your Helm deployment.
+
+  ## Installation
+
+  ```bash
+  helm plugin install https://github.com/jessesimpson36/values-blame
+  ```
+
+  ## Usage
+
+  ```bash
+  helm values-blame -f values.yaml -f values-2.yaml
+  ```
+
+  This will show you exactly which file each configuration setting comes from, making it easy to debug complex Helm deployments with multiple values files.
+
+  ## Features
+
+  - Support for multiple values files
+  - Clear attribution of configuration sources
+  - Option to show only coalesced values
+  - Option to hide file names in output
+
+  ## Options
+
+  - `-f` or `--values`: Specify values files (can be used multiple times)
+  - `-c`: Only print coalesced values
+  - `-n`: Don't print file names in output
