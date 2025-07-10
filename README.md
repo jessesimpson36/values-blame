@@ -9,7 +9,7 @@
 Install the plugin directly from the repository:
 
 ```bash
-helm plugin install https://github.com/your-username/values-blame
+helm plugin install https://github.com/jessesimpson36/values-blame
 ```
 
 Or install locally if you've cloned the repository:
