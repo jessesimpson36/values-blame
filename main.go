@@ -137,7 +137,7 @@ func main() {
 
 	// process values files via -f filename -f filename2
 	if len(os.Args) < 2 {
-		fmt.Println("Usage: go run main.go -f values.yaml -f values-2.yaml")
+		fmt.Println("Usage: helm values-blame -f values.yaml -f values-2.yaml")
 		return
 	}
 
@@ -161,7 +161,6 @@ func main() {
 		valuesFilesList = append(valuesFilesList, os.Args[i])
 	}
 
-
 	v1, err := util.ReadValuesFile(valuesFilesList[0])
 	if err != nil {
 		fmt.Printf("Error reading values file %s: %v\n", valuesFilesList[0], err)
@@ -177,7 +176,7 @@ func main() {
 			Version: "1.2.3",
 		},
 		Templates: []*chart.File{},
-		Values: v1,
+		Values:    v1,
 	}
 	traverseValues(valuesCoalesced, v1, valuesFilesList[0], &options)
 
@@ -198,7 +197,7 @@ func main() {
 				Version: "1.2.3",
 			},
 			Templates: []*chart.File{},
-			Values: valuesCoalesced,
+			Values:    valuesCoalesced,
 		}
 		traverseValues(valuesCoalesced, v1, valuesFile, &options)
 	}
